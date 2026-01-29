@@ -342,6 +342,16 @@ class Database:
         conn.close()
         return dict(row) if row else None
     
+    def obtener_iva_por_porcentaje(self, porcentaje: float) -> Optional[Dict]:
+        """Obtiene un IVA por su porcentaje"""
+        conn = self.get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ivas WHERE porcentaje = ? AND activo = 1 LIMIT 1", (porcentaje,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+    
     # ========== PRESUPUESTOS ==========
     def obtener_siguiente_numero_presupuesto(self) -> str:
         """Obtiene el siguiente número de presupuesto"""
@@ -632,6 +642,110 @@ class Database:
         facturas = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return facturas
+    
+    def obtener_facturas_filtradas(self, cliente_id: Optional[int] = None, 
+                                   fecha_desde: Optional[str] = None, 
+                                   fecha_hasta: Optional[str] = None,
+                                   estado: Optional[str] = None) -> List[Dict]:
+        """Obtiene facturas filtradas por cliente y fecha con desglose de bruto, IVA y neto"""
+        conn = self.get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT f.*, c.nombre as cliente_nombre,
+                   COALESCE((
+                       SELECT SUM(fl.cantidad * fl.precio_unitario * (1 - fl.descuento/100))
+                       FROM factura_lineas fl
+                       WHERE fl.factura_id = f.id
+                   ), 0) as bruto,
+                   COALESCE((
+                       SELECT SUM((fl.cantidad * fl.precio_unitario * (1 - fl.descuento/100)) * 
+                                 COALESCE((SELECT porcentaje FROM ivas WHERE id = fl.iva_id), 0)/100)
+                       FROM factura_lineas fl
+                       WHERE fl.factura_id = f.id
+                   ), 0) as iva,
+                   f.total as neto
+            FROM facturas f
+            JOIN clientes c ON f.cliente_id = c.id
+            WHERE 1=1
+        """
+        params = []
+        
+        if cliente_id:
+            query += " AND f.cliente_id = ?"
+            params.append(cliente_id)
+        
+        if fecha_desde:
+            query += " AND f.fecha >= ?"
+            params.append(fecha_desde)
+        
+        if fecha_hasta:
+            query += " AND f.fecha <= ?"
+            params.append(fecha_hasta)
+        
+        if estado and estado != "Todos":
+            query += " AND f.estado = ?"
+            params.append(estado.lower())
+        
+        query += " ORDER BY f.fecha DESC, f.numero DESC"
+        
+        cursor.execute(query, params)
+        facturas = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return facturas
+    
+    def obtener_presupuestos_filtrados(self, cliente_id: Optional[int] = None, 
+                                       fecha_desde: Optional[str] = None, 
+                                       fecha_hasta: Optional[str] = None,
+                                       estado: Optional[str] = None) -> List[Dict]:
+        """Obtiene presupuestos filtrados por cliente y fecha con desglose de bruto, IVA y neto"""
+        conn = self.get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT p.*, c.nombre as cliente_nombre,
+                   COALESCE((
+                       SELECT SUM(pl.cantidad * pl.precio_unitario * (1 - pl.descuento/100))
+                       FROM presupuesto_lineas pl
+                       WHERE pl.presupuesto_id = p.id
+                   ), 0) as bruto,
+                   COALESCE((
+                       SELECT SUM((pl.cantidad * pl.precio_unitario * (1 - pl.descuento/100)) * 
+                                 COALESCE((SELECT porcentaje FROM ivas WHERE id = pl.iva_id), 0)/100)
+                       FROM presupuesto_lineas pl
+                       WHERE pl.presupuesto_id = p.id
+                   ), 0) as iva,
+                   p.total as neto
+            FROM presupuestos p
+            JOIN clientes c ON p.cliente_id = c.id
+            WHERE 1=1
+        """
+        params = []
+        
+        if cliente_id:
+            query += " AND p.cliente_id = ?"
+            params.append(cliente_id)
+        
+        if fecha_desde:
+            query += " AND p.fecha >= ?"
+            params.append(fecha_desde)
+        
+        if fecha_hasta:
+            query += " AND p.fecha <= ?"
+            params.append(fecha_hasta)
+        
+        if estado and estado != "Todos":
+            query += " AND p.estado = ?"
+            params.append(estado.lower())
+        
+        query += " ORDER BY p.fecha DESC, p.numero DESC"
+        
+        cursor.execute(query, params)
+        presupuestos = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return presupuestos
     
     def obtener_factura(self, factura_id: int) -> Optional[Dict]:
         """Obtiene una factura con sus líneas"""

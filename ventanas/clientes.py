@@ -56,9 +56,17 @@ class VentanaClientes:
         self.email_var = tk.StringVar()
         ttk.Entry(form_frame, textvariable=self.email_var, width=40).grid(row=4, column=1, pady=5, padx=5)
         
+        # IVA Predeterminado
+        ttk.Label(form_frame, text="IVA Predeterminado:").grid(row=5, column=0, sticky=tk.W, pady=5)
+        self.iva_predeterminado_var = tk.StringVar()
+        self.iva_combo = ttk.Combobox(form_frame, textvariable=self.iva_predeterminado_var, 
+                                       state="readonly", width=37)
+        self.iva_combo.grid(row=5, column=1, sticky=tk.W, pady=5, padx=5)
+        self.cargar_ivas()  # Cargar IVAs al crear la interfaz
+        
         # Botones del formulario
         btn_frame = ttk.Frame(form_frame)
-        btn_frame.grid(row=5, column=0, columnspan=2, pady=10)
+        btn_frame.grid(row=6, column=0, columnspan=2, pady=10)
         
         ttk.Button(btn_frame, text="Guardar", command=self.guardar_cliente).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Nuevo", command=self.nuevo_cliente).pack(side=tk.LEFT, padx=5)
@@ -71,12 +79,25 @@ class VentanaClientes:
         list_frame.pack(fill=tk.BOTH, expand=True)
         
         # Treeview
-        columns = ("ID", "Nombre", "NIF", "Dirección", "Teléfono", "Email")
+        columns = ("ID", "Nombre", "NIF", "Dirección", "Teléfono", "Email", "IVA Pred.")
         self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
         
-        for col in columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=120)
+        # Configurar columnas
+        self.tree.heading("ID", text="ID")
+        self.tree.heading("Nombre", text="Nombre")
+        self.tree.heading("NIF", text="NIF")
+        self.tree.heading("Dirección", text="Dirección")
+        self.tree.heading("Teléfono", text="Teléfono")
+        self.tree.heading("Email", text="Email")
+        self.tree.heading("IVA Pred.", text="IVA Pred.")
+        
+        self.tree.column("ID", width=50)
+        self.tree.column("Nombre", width=150)
+        self.tree.column("NIF", width=100)
+        self.tree.column("Dirección", width=150)
+        self.tree.column("Teléfono", width=100)
+        self.tree.column("Email", width=150)
+        self.tree.column("IVA Pred.", width=100)
         
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
@@ -95,13 +116,21 @@ class VentanaClientes:
         # Cargar clientes
         clientes = self.db.obtener_clientes()
         for cliente in clientes:
+            # Obtener nombre del IVA predeterminado si existe
+            iva_texto = ""
+            if cliente.get('iva_predeterminado_id'):
+                iva = self.db.obtener_iva(cliente['iva_predeterminado_id'])
+                if iva:
+                    iva_texto = f"{iva['nombre']} ({iva['porcentaje']}%)"
+            
             self.tree.insert("", tk.END, values=(
                 cliente['id'],
                 cliente['nombre'],
                 cliente['nif'] or '',
                 cliente['direccion'] or '',
                 cliente['telefono'] or '',
-                cliente['email'] or ''
+                cliente['email'] or '',
+                iva_texto
             ))
     
     def nuevo_cliente(self):

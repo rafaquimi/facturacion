@@ -13,6 +13,7 @@ from ventanas.presupuestos import VentanaPresupuestos
 from ventanas.facturas import VentanaFacturas
 from ventanas.empresa import VentanaEmpresa
 from ventanas.disenador_plantillas import VentanaDisenadorPlantillas
+from ventanas.informes import VentanaInformes
 
 
 class AppFacturacion:
@@ -60,6 +61,8 @@ class AppFacturacion:
         menubar.add_cascade(label="Documentos", menu=menu_documentos)
         menu_documentos.add_command(label="Presupuestos", command=self.abrir_presupuestos)
         menu_documentos.add_command(label="Facturas", command=self.abrir_facturas)
+        menu_documentos.add_separator()
+        menu_documentos.add_command(label="Informes", command=lambda: self.mostrar_panel("informes"))
     
     def crear_interfaz(self):
         """Crea la interfaz principal con sistema de paneles"""
@@ -80,6 +83,8 @@ class AppFacturacion:
                    command=lambda: self.mostrar_panel("clientes"), width=18).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar_frame, text="💰 IVAs", 
                    command=lambda: self.mostrar_panel("ivas"), width=18).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar_frame, text="📊 Informes", 
+                   command=lambda: self.mostrar_panel("informes"), width=18).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar_frame, text="🏢 Empresa", 
                    command=self.abrir_empresa, width=18).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar_frame, text="🎨 Diseñador", 
@@ -116,7 +121,8 @@ class AppFacturacion:
             "presupuestos": "📋 Presupuestos",
             "facturas": "🧾 Facturas",
             "clientes": "👥 Clientes",
-            "ivas": "💰 IVAs"
+            "ivas": "💰 IVAs",
+            "informes": "📊 Informes"
         }
         
         texto_pestana = nombres_pestanas.get(nombre_panel, nombre_panel.capitalize())
@@ -213,6 +219,8 @@ class AppFacturacion:
             ventana_instancia = VentanaClientes(nuevo_frame, self.db)
         elif nombre_panel == "ivas":
             ventana_instancia = VentanaIVAs(nuevo_frame, self.db)
+        elif nombre_panel == "informes":
+            ventana_instancia = VentanaInformes(nuevo_frame, self.db, self.pdf_gen)
         
         # Agregar pestaña al notebook con X al inicio
         texto_con_x = f"✕ {texto_pestana}"

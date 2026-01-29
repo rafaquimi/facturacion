@@ -710,7 +710,7 @@ class VentanaEditarPresupuesto:
                 pass
             self.edit_entry = None
         
-        # Obtener IVA predeterminado (del cliente o general)
+        # Obtener IVA predeterminado (del cliente o 21% por defecto)
         iva_predeterminado = None
         iva_texto = ""
         
@@ -722,13 +722,18 @@ class VentanaEditarPresupuesto:
                     iva_predeterminado = iva
                     iva_texto = f"{iva['porcentaje']:.1f}%"
         
-        # Si no hay IVA del cliente, usar el predeterminado general
+        # Si no hay IVA del cliente, usar el 21% por defecto
         if not iva_predeterminado:
-            iva_predeterminado = self.db.obtener_iva_predeterminado()
+            iva_predeterminado = self.db.obtener_iva_por_porcentaje(21.0)
             if iva_predeterminado:
                 iva_texto = f"{iva_predeterminado['porcentaje']:.1f}%"
             else:
-                iva_texto = "Sin IVA"
+                # Si no existe el 21%, usar el predeterminado general como fallback
+                iva_predeterminado = self.db.obtener_iva_predeterminado()
+                if iva_predeterminado:
+                    iva_texto = f"{iva_predeterminado['porcentaje']:.1f}%"
+                else:
+                    iva_texto = "Sin IVA"
         
         # Crear línea completamente vacía (excepto IVA predeterminado)
         item = self.tree_lineas.insert("", tk.END, values=("", "", "", iva_texto, "0%", ""), tags=("NUEVA",))

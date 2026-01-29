@@ -757,3 +757,236 @@ class PDFGenerator:
         tabla.setStyle(estilo_tabla)
         story.append(Spacer(1, elemento.get('y', 0) * mm / 72))
         story.append(tabla)
+    
+    def generar_informe(self, resultados: List[Dict], filtros: Dict, output_path: str):
+        """Genera un PDF con un informe de facturas y presupuestos filtrados"""
+        try:
+            doc = SimpleDocTemplate(output_path, pagesize=A4,
+                                   leftMargin=15*mm, rightMargin=15*mm,
+                                   topMargin=15*mm, bottomMargin=15*mm)
+            story = []
+            
+            # Obtener datos de la empresa
+            empresa = self._obtener_datos_empresa()
+            
+            # Logo y datos de empresa (encabezado)
+            header_data = []
+            logo_cell = None
+            
+            if empresa.get('logo_path') and os.path.exists(empresa['logo_path']):
+                try:
+                    from PIL import Image as PILImage
+                    img = PILImage.open(empresa['logo_path'])
+                    img_width, img_height = img.size
+                    max_width = 30*mm
+                    max_height = 25*mm
+                    ratio = min(max_width/img_width, max_height/img_height)
+                    new_width = img_width * ratio
+                    new_height = img_height * ratio
+                    logo_cell = Image(empresa['logo_path'], width=new_width, height=new_height)
+                except:
+                    logo_cell = None
+            
+            # Datos de empresa
+            empresa_text = []
+            if empresa.get('nombre'):
+                empresa_text.append(Paragraph(f"<b>{empresa['nombre']}</b>", self.styles['Normal']))
+            if empresa.get('nif'):
+                empresa_text.append(Paragraph(f"NIF: {empresa['nif']}", self.styles['Normal']))
+            
+            direccion_parts = []
+            if empresa.get('direccion'):
+                direccion_parts.append(empresa['direccion'])
+            if empresa.get('codigo_postal'):
+                direccion_parts.append(empresa['codigo_postal'])
+            if empresa.get('localidad'):
+                direccion_parts.append(empresa['localidad'])
+            if empresa.get('provincia'):
+                direccion_parts.append(empresa['provincia'])
+            if direccion_parts:
+                empresa_text.append(Paragraph(', '.join(direccion_parts), self.styles['Normal']))
+            
+            # Crear tabla de encabezado
+            num_filas = max(len(empresa_text), 1)
+            for i in range(num_filas):
+                row = []
+                if i == 0:
+                    row.append(logo_cell if logo_cell else '')
+                else:
+                    row.append('')
+                if i < len(empresa_text):
+                    row.append(empresa_text[i])
+                else:
+                    row.append('')
+                header_data.append(row)
+            
+            header_table = Table(header_data, colWidths=[35*mm, 150*mm])
+            header_style = TableStyle([
+                ('VALIGN', (0, 0), (0, -1), 'TOP'),
+                ('VALIGN', (1, 0), (1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ])
+            if logo_cell:
+                header_style.add('SPAN', (0, 0), (0, -1))
+            header_table.setStyle(header_style)
+            story.append(header_table)
+            story.append(Spacer(1, 5*mm))
+            
+            # Título del informe
+            story.append(Paragraph("INFORME DE DOCUMENTOS", self.styles['Titulo']))
+            story.append(Spacer(1, 3*mm))
+            
+            # Información de filtros aplicados
+            filtros_text = []
+            filtros_text.append(Paragraph("<b>Filtros aplicados:</b>", self.styles['Normal']))
+            
+            if filtros.get('cliente_nombre') and filtros['cliente_nombre'] != "Todos":
+                filtros_text.append(Paragraph(f"Cliente: {filtros['cliente_nombre']}", self.styles['Normal']))
+            else:
+                filtros_text.append(Paragraph("Cliente: Todos", self.styles['Normal']))
+            
+            if filtros.get('fecha_desde'):
+                filtros_text.append(Paragraph(f"Fecha desde: {filtros['fecha_desde']}", self.styles['Normal']))
+            if filtros.get('fecha_hasta'):
+                filtros_text.append(Paragraph(f"Fecha hasta: {filtros['fecha_hasta']}", self.styles['Normal']))
+            
+            filtros_text.append(Paragraph(f"Tipo: {filtros.get('tipo', 'Facturas')}", self.styles['Normal']))
+            if filtros.get('estado') and filtros['estado'] != "Todos":
+                filtros_text.append(Paragraph(f"Estado: {filtros['estado']}", self.styles['Normal']))
+            
+            filtros_table = Table([[f] for f in filtros_text], colWidths=[170*mm])
+            filtros_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ]))
+            story.append(filtros_table)
+            story.append(Spacer(1, 5*mm))
+            
+            # Recuadro de resumen más vistoso
+            resumen_data = [
+                [Paragraph("<b>RESUMEN DEL INFORME</b>", self.styles['Heading2'])],
+                ['Total de registros:', f"{len(resultados)}"],
+                ['Total Bruto:', f"{filtros.get('bruto', 0):.2f} €"],
+                ['Total IVA:', f"{filtros.get('iva', 0):.2f} €"],
+                [Paragraph("<b>Total Neto:</b>", self.styles['Normal']), 
+                 Paragraph(f"<b>{filtros.get('neto', 0):.2f} €</b>", self.styles['Normal'])]
+            ]
+            
+            resumen_table = Table(resumen_data, colWidths=[100*mm, 70*mm])
+            resumen_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('FONTSIZE', (0, 1), (-1, -2), 10),
+                ('FONTSIZE', (0, -1), (-1, -1), 11),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('TOPPADDING', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+                ('TOPPADDING', (0, 1), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            story.append(resumen_table)
+            story.append(Spacer(1, 5*mm))
+            
+            # Determinar si mostrar columna cliente
+            mostrar_cliente = filtros.get('cliente_nombre', 'Todos') == 'Todos' or not filtros.get('cliente_id')
+            
+            # Tabla de resultados
+            if resultados:
+                # Encabezados de la tabla
+                if mostrar_cliente:
+                    table_data = [[
+                        Paragraph("<b>Tipo</b>", self.styles['Normal']),
+                        Paragraph("<b>Número</b>", self.styles['Normal']),
+                        Paragraph("<b>Cliente</b>", self.styles['Normal']),
+                        Paragraph("<b>Fecha</b>", self.styles['Normal']),
+                        Paragraph("<b>Bruto</b>", self.styles['Normal']),
+                        Paragraph("<b>IVA</b>", self.styles['Normal']),
+                        Paragraph("<b>Neto</b>", self.styles['Normal']),
+                        Paragraph("<b>Estado</b>", self.styles['Normal'])
+                    ]]
+                    col_widths = [20*mm, 20*mm, 40*mm, 20*mm, 22*mm, 22*mm, 22*mm, 18*mm]
+                else:
+                    table_data = [[
+                        Paragraph("<b>Tipo</b>", self.styles['Normal']),
+                        Paragraph("<b>Número</b>", self.styles['Normal']),
+                        Paragraph("<b>Fecha</b>", self.styles['Normal']),
+                        Paragraph("<b>Bruto</b>", self.styles['Normal']),
+                        Paragraph("<b>IVA</b>", self.styles['Normal']),
+                        Paragraph("<b>Neto</b>", self.styles['Normal']),
+                        Paragraph("<b>Estado</b>", self.styles['Normal'])
+                    ]]
+                    col_widths = [25*mm, 25*mm, 25*mm, 25*mm, 25*mm, 25*mm, 20*mm]
+                
+                # Datos
+                for r in resultados:
+                    if mostrar_cliente:
+                        table_data.append([
+                            r.get('tipo', ''),
+                            r.get('numero', ''),
+                            r.get('cliente', ''),
+                            r.get('fecha', ''),
+                            f"{r.get('bruto', 0):.2f} €",
+                            f"{r.get('iva', 0):.2f} €",
+                            f"{r.get('neto', 0):.2f} €",
+                            r.get('estado', '')
+                        ])
+                    else:
+                        table_data.append([
+                            r.get('tipo', ''),
+                            r.get('numero', ''),
+                            r.get('fecha', ''),
+                            f"{r.get('bruto', 0):.2f} €",
+                            f"{r.get('iva', 0):.2f} €",
+                            f"{r.get('neto', 0):.2f} €",
+                            r.get('estado', '')
+                        ])
+                
+                # Crear tabla
+                table = Table(table_data, colWidths=col_widths)
+                table.setStyle(TableStyle([
+                    # Encabezado
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    # Datos
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                    ('TOPPADDING', (0, 1), (-1, -1), 4),
+                ]))
+                story.append(table)
+            else:
+                story.append(Paragraph("<i>No se encontraron resultados con los filtros aplicados.</i>", 
+                                     self.styles['Normal']))
+            
+            # Pie de página
+            story.append(Spacer(1, 10*mm))
+            fecha_generacion = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            story.append(Paragraph(f"<i>Informe generado el {fecha_generacion}</i>", 
+                                 self.styles['Normal']))
+            
+            # Construir PDF
+            doc.build(story)
+        
+        except Exception as e:
+            print(f"Error al generar informe PDF: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
